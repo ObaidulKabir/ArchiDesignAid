@@ -125,8 +125,10 @@ The interactive heart of the application.
 
 ### Design Element Library
 Manage the building blocks of your designs.
+- **Search & Filter**: Quickly find elements by name or category (e.g., "Furniture", "Structural").
 - **System Library**: Comes with standard architectural elements (beds, desks, doors).
 - **Custom Elements**: (Admin/Advanced) Define new elements with specific dimensions and properties.
+- **Seed Defaults**: Quickly populate your library with a standard set of items if empty.
 
 ---
 

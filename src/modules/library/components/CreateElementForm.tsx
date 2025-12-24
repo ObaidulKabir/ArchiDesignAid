@@ -14,6 +14,7 @@ interface CreateElementFormProps {
 
 export default function CreateElementForm({ onSuccess, onCancel }: CreateElementFormProps) {
   const [error, setError] = useState<string | null>(null);
+  const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
   const {
     register,
     handleSubmit,
@@ -36,6 +37,15 @@ export default function CreateElementForm({ onSuccess, onCancel }: CreateElement
   // Auto-calculate area when dimensions change
   const widthStd = watch('dimensions.width.standard');
   const lengthStd = watch('dimensions.length.standard');
+  const minWidth = watch('dimensions.width.min');
+  const minLength = watch('dimensions.length.min');
+  const areaStd = watch('area.standard');
+  const minArea = watch('area.min');
+
+  const mToFt = (m: number) => m * 3.28084;
+  const ftToM = (ft: number) => ft / 3.28084;
+  const sqmToSqft = (sqm: number) => sqm * 10.7639;
+  const sqftToSqm = (sqft: number) => sqft / 10.7639;
 
   const handleCalculateArea = () => {
       const w = Number(widthStd);
@@ -64,6 +74,18 @@ export default function CreateElementForm({ onSuccess, onCancel }: CreateElement
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="unit">Units</Label>
+            <select
+              id="unit"
+              className="flex h-10 w-48 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as 'metric' | 'imperial')}
+            >
+              <option value="metric">Metric (m, sqm)</option>
+              <option value="imperial">Imperial (ft, sqft)</option>
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -101,44 +123,84 @@ export default function CreateElementForm({ onSuccess, onCancel }: CreateElement
 
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-               <Label>Standard Width (m)</Label>
+               <Label>Standard Width ({unit==='metric'?'m':'ft'})</Label>
                <Input 
                  type="number" 
-                 step="0.01" 
-                 {...register('dimensions.width.standard')} 
+                 step="0.01"
+                 value={unit==='metric' ? (widthStd ?? 0) : (widthStd ? mToFt(widthStd) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('dimensions.width.standard', unit==='metric' ? v : ftToM(v), { shouldDirty: true });
+                 }}
                  onBlur={handleCalculateArea}
                />
                {errors.dimensions?.width?.standard && <p className="text-sm text-red-500">{errors.dimensions.width.standard.message}</p>}
             </div>
             <div className="space-y-2">
-               <Label>Standard Length (m)</Label>
+               <Label>Standard Length ({unit==='metric'?'m':'ft'})</Label>
                <Input 
                  type="number" 
-                 step="0.01" 
-                 {...register('dimensions.length.standard')} 
+                 step="0.01"
+                 value={unit==='metric' ? (lengthStd ?? 0) : (lengthStd ? mToFt(lengthStd) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('dimensions.length.standard', unit==='metric' ? v : ftToM(v), { shouldDirty: true });
+                 }}
                  onBlur={handleCalculateArea}
                />
                {errors.dimensions?.length?.standard && <p className="text-sm text-red-500">{errors.dimensions.length.standard.message}</p>}
             </div>
              <div className="space-y-2">
-               <Label>Standard Area (sqm)</Label>
-               <Input type="number" step="0.01" {...register('area.standard')} />
+               <Label>Standard Area ({unit==='metric'?'sqm':'sqft'})</Label>
+               <Input 
+                 type="number" 
+                 step="0.01" 
+                 value={unit==='metric' ? (areaStd ?? 0) : (areaStd ? sqmToSqft(areaStd) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('area.standard', unit==='metric' ? v : sqftToSqm(v), { shouldDirty: true });
+                 }}
+               />
                {errors.area?.standard && <p className="text-sm text-red-500">{errors.area.standard.message}</p>}
             </div>
           </div>
           
           <div className="grid grid-cols-3 gap-4">
              <div className="space-y-2">
-               <Label className="text-gray-500">Min Width (Optional)</Label>
-               <Input type="number" step="0.01" {...register('dimensions.width.min')} />
+               <Label className="text-gray-500">Min Width ({unit==='metric'?'m':'ft'})</Label>
+               <Input 
+                 type="number" 
+                 step="0.01" 
+                 value={unit==='metric' ? (minWidth ?? 0) : (minWidth ? mToFt(minWidth) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('dimensions.width.min', unit==='metric' ? v : ftToM(v), { shouldDirty: true });
+                 }}
+               />
             </div>
             <div className="space-y-2">
-               <Label className="text-gray-500">Min Length (Optional)</Label>
-               <Input type="number" step="0.01" {...register('dimensions.length.min')} />
+               <Label className="text-gray-500">Min Length ({unit==='metric'?'m':'ft'})</Label>
+               <Input 
+                 type="number" 
+                 step="0.01" 
+                 value={unit==='metric' ? (minLength ?? 0) : (minLength ? mToFt(minLength) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('dimensions.length.min', unit==='metric' ? v : ftToM(v), { shouldDirty: true });
+                 }}
+               />
             </div>
              <div className="space-y-2">
-               <Label className="text-gray-500">Min Area (Optional)</Label>
-               <Input type="number" step="0.01" {...register('area.min')} />
+               <Label className="text-gray-500">Min Area ({unit==='metric'?'sqm':'sqft'})</Label>
+               <Input 
+                 type="number" 
+                 step="0.01" 
+                 value={unit==='metric' ? (minArea ?? 0) : (minArea ? sqmToSqft(minArea) : 0)}
+                 onChange={(e) => {
+                   const v = parseFloat(e.target.value || '0');
+                   setValue('area.min', unit==='metric' ? v : sqftToSqm(v), { shouldDirty: true });
+                 }}
+               />
             </div>
           </div>
 
