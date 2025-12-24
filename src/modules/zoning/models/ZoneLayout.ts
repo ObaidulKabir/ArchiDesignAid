@@ -16,6 +16,15 @@ export interface IZoneLayout extends Document {
     width: number;   // meters
     length: number;  // meters
   };
+  childZones?: Array<{
+    zoneId: mongoose.Types.ObjectId;
+    name: string;
+    x: number; // meters
+    y: number; // meters
+    width: number; // meters
+    length: number; // meters
+    isOverLapping?: boolean;
+  }>;
   elements: IPlacedElement[];
   version: number;
   lastModifiedBy?: mongoose.Types.ObjectId;
@@ -48,6 +57,17 @@ const ZoneLayoutSchema = new Schema<IZoneLayout>(
       width: { type: Number },
       length: { type: Number },
     },
+    childZones: [
+      {
+        zoneId: { type: Schema.Types.ObjectId, ref: 'Zone', required: true },
+        name: { type: String },
+        x: { type: Number, default: 0 },
+        y: { type: Number, default: 0 },
+        width: { type: Number, required: true },
+        length: { type: Number, required: true },
+        isOverLapping: { type: Boolean, default: false },
+      },
+    ],
     elements: [PlacedElementSchema],
     version: { type: Number, default: 1 },
     lastModifiedBy: { type: Schema.Types.ObjectId, ref: 'User' },

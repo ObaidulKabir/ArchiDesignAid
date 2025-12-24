@@ -42,6 +42,9 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
   const [zoom, setZoom] = useState<number>(1); // view scale only
   const [lockArea, setLockArea] = useState<boolean>(true);
   const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
+  const [mode, setMode] = useState<'elements' | 'zones'>('zones');
+  const [draggingZoneId, setDraggingZoneId] = useState<string | null>(null);
+  const [childRects, setChildRects] = useState<Array<{ zoneId: string; name: string; x: number; y: number; width: number; length: number; maxArea: number }>>([]);
   
   // Canvas settings (1 meter = 40 pixels)
   const SCALE = 40;
@@ -63,6 +66,37 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
             setContainer({ width: defaultSide, length: defaultSide });
             setAspect(1);
         }
+        // Initialize child zone rectangles
+        if (childZones.length > 0) {
+          if (layout?.childZones?.length) {
+            setChildRects(layout.childZones.map((cz: any) => ({
+              zoneId: cz.zoneId,
+              name: cz.name,
+              x: cz.x,
+              y: cz.y,
+              width: cz.width,
+              length: cz.length,
+              maxArea: (childZones.find((c: any) => c._id === cz.zoneId)?.calculatedArea) ?? (cz.width * cz.length),
+            })));
+          } else {
+            let yCursor = 0;
+            const rects = childZones.map((cz: any) => {
+              const side = Math.sqrt(cz.calculatedArea);
+              const rect = {
+                zoneId: cz._id,
+                name: cz.name,
+                x: 0,
+                y: yCursor,
+                width: side,
+                length: side,
+                maxArea: cz.calculatedArea,
+              };
+              yCursor += side + 0.5;
+              return rect;
+            });
+            setChildRects(rects);
+          }
+        }
         setIsLoading(false);
     };
     loadLayout();
@@ -70,7 +104,12 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
   
   const handleSave = async () => {
     setIsSaving(true);
-    const result = await saveZoneLayout(zone._id, elements, container || undefined);
+    const result = await saveZoneLayout(
+      zone._id, 
+      elements, 
+      container || undefined,
+      childRects.map(r => ({ zoneId: r.zoneId, name: r.name, x: r.x, y: r.y, width: r.width, length: r.length }))
+    );
     setIsSaving(false);
     if (result.success) {
         // Maybe show toast notification here
@@ -134,6 +173,9 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
 
   const updateElement = (id: string, updates: Partial<PlacedElement>) => {
     setElements(elements.map(el => el.instanceId === id ? { ...el, ...updates } : el));
+  };
+  const updateChildRect = (zoneId: string, updates: Partial<{ x: number; y: number; width: number; length: number }>) => {
+    setChildRects(prev => prev.map(r => r.zoneId === zoneId ? { ...r, ...updates } : r));
   };
   
   useEffect(() => {
@@ -228,25 +270,40 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
         return;
       }
 
-      if (!draggingId || !dragStart || !mouseStart) return;
+      if (!dragStart || !mouseStart) return;
       const dx = (e.clientX - mouseStart.x) / PX;
       const dy = (e.clientY - mouseStart.y) / PX;
       const boundsW = container?.width ?? Math.sqrt(totalArea);
       const boundsL = container?.length ?? Math.sqrt(totalArea);
-      setElements(prev =>
-        prev.map(el => {
-          if (el.instanceId !== draggingId) return el;
-          let x = dragStart.x + dx;
-          let y = dragStart.y + dy;
-          x = Math.max(0, Math.min(x, boundsW - el.width));
-          y = Math.max(0, Math.min(y, boundsL - el.length));
-          return { ...el, x, y };
-        })
-      );
+      if (draggingId) {
+        setElements(prev =>
+          prev.map(el => {
+            if (el.instanceId !== draggingId) return el;
+            let x = dragStart.x + dx;
+            let y = dragStart.y + dy;
+            x = Math.max(0, Math.min(x, boundsW - el.width));
+            y = Math.max(0, Math.min(y, boundsL - el.length));
+            return { ...el, x, y };
+          })
+        );
+      }
+      if (draggingZoneId) {
+        setChildRects(prev =>
+          prev.map(r => {
+            if (r.zoneId !== draggingZoneId) return r;
+            let x = dragStart.x + dx;
+            let y = dragStart.y + dy;
+            x = Math.max(0, Math.min(x, boundsW - r.width));
+            y = Math.max(0, Math.min(y, boundsL - r.length));
+            return { ...r, x, y };
+          })
+        );
+      }
     };
     const onMouseUp = () => {
-      if (draggingId) {
+      if (draggingId || draggingZoneId) {
         setDraggingId(null);
+        setDraggingZoneId(null);
         setDragStart(null);
         setMouseStart(null);
       }
@@ -257,7 +314,7 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
           setMouseStart(null);
       }
     };
-    if (draggingId || resizingId) {
+    if (draggingId || draggingZoneId || resizingId) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
     }
@@ -265,7 +322,7 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [draggingId, dragStart, mouseStart, container, totalArea, SCALE, resizingId, resizeStartDims, resizeHandle, elements]);
+  }, [draggingId, draggingZoneId, dragStart, mouseStart, container, totalArea, SCALE, resizingId, resizeStartDims, resizeHandle, elements, PX]);
 
   const deleteSelected = () => {
     if (selectedId) {
@@ -683,6 +740,16 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                 <Button variant="outline" size="sm" onClick={zoomIn}><ZoomIn size={16} /></Button>
             </div>
             <div className="font-medium">{zone.name} Planner</div>
+            <div className="flex gap-2">
+              <select 
+                className="h-8 rounded border px-2 text-sm"
+                value={mode}
+                onChange={(e) => setMode(e.target.value as 'elements' | 'zones')}
+              >
+                <option value="zones">Child Zones</option>
+                <option value="elements">Elements</option>
+              </select>
+            </div>
             <Button size="sm" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 animate-spin" size={16}/> : <Save size={16} className="mr-2"/>} 
                 Save Layout
@@ -725,7 +792,7 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                     }} 
                 />
 
-                {elements.map(el => (
+                {mode === 'elements' && elements.map(el => (
                     <div
                         key={el.instanceId}
                         onClick={(e) => { e.stopPropagation(); setSelectedId(el.instanceId); }}
@@ -780,6 +847,71 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                             </>
                         )}
                     </div>
+                ))}
+                
+                {mode === 'zones' && childRects.map(r => (
+                  <div
+                    key={r.zoneId}
+                    onClick={(e) => { e.stopPropagation(); setSelectedId(r.zoneId); }}
+                    onMouseDown={(e) => { 
+                      e.stopPropagation(); 
+                      setSelectedId(r.zoneId); 
+                      setDraggingZoneId(r.zoneId); 
+                      setDragStart({ x: r.x, y: r.y }); 
+                      setMouseStart({ x: e.clientX, y: e.clientY }); 
+                    }}
+                    className={`absolute flex items-center justify-center text-xs cursor-move transition-colors ${selectedId === r.zoneId ? 'ring-2 ring-blue-500 z-10' : ''}`}
+                    style={{
+                      left: r.x * PX,
+                      top: r.y * PX,
+                      width: r.width * PX,
+                      height: r.length * PX,
+                      backgroundColor: '#e5e7eb',
+                      border: '1px solid #cbd5e1',
+                      opacity: 0.9,
+                    }}
+                  >
+                    <div className="flex flex-col items-center justify-center px-1 text-[11px] leading-tight">
+                      <div className="font-semibold text-gray-700">{r.name}</div>
+                      <div className="text-gray-600 select-none">
+                        {unit === 'metric' 
+                          ? `${r.width.toFixed(2)}m x ${r.length.toFixed(2)}m`
+                          : `${fmtImperial(r.width)} x ${fmtImperial(r.length)}`
+                        }
+                      </div>
+                    </div>
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const startMouse = { x: e.clientX, y: e.clientY };
+                        const start = { width: r.width, length: r.length };
+                        const boundsW = container?.width ?? Math.sqrt(totalArea);
+                        const boundsL = container?.length ?? Math.sqrt(totalArea);
+                        const onMove = (ev: MouseEvent) => {
+                          const dx = (ev.clientX - startMouse.x) / PX;
+                          const dy = (ev.clientY - startMouse.y) / PX;
+                          let width = Math.max(0.5, Math.min(boundsW - r.x, start.width + dx));
+                          let length = Math.max(0.5, Math.min(boundsL - r.y, start.length + dy));
+                          const maxArea = r.maxArea;
+                          if (width * length > maxArea) {
+                            const ratio = Math.sqrt(maxArea / (width * length));
+                            width = width * ratio;
+                            length = length * ratio;
+                          }
+                          updateChildRect(r.zoneId, { width, length });
+                        };
+                        const onUp = () => {
+                          window.removeEventListener('mousemove', onMove);
+                          window.removeEventListener('mouseup', onUp);
+                        };
+                        window.addEventListener('mousemove', onMove);
+                        window.addEventListener('mouseup', onUp);
+                      }}
+                      className="absolute w-3 h-3 bg-blue-500 rounded-sm cursor-se-resize"
+                      style={{ right: '-6px', bottom: '-6px' }}
+                      title="Resize"
+                    />
+                  </div>
                 ))}
             </div>
         </div>

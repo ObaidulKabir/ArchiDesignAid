@@ -86,6 +86,11 @@ Open your browser and navigate to `http://localhost:3000`.
 
 ## 4. Feature Guide
 
+### Authentication
+Secure access to your projects and designs.
+- **Login**: Access the application using your email and password at the `/login` page.
+- **Security**: Validates credentials securely (currently supports standard email/password authentication).
+
 ### Project Management
 The **Projects** module is the central hub for your work.
 - **Create Project**: Click "New Project" and fill in details like Name, Location, and Land Area.
@@ -93,31 +98,17 @@ The **Projects** module is the central hub for your work.
 - **Edit/Delete**: Manage project metadata as requirements change.
 
 ### Zoning Hierarchy
-Organize your project structure logically.
-- **Structure**: Define a hierarchy such as `Building A -> Floor 1 -> Residential Wing -> Apartment 101`.
-- **Area Units**: Each zone’s allocation can be set as `Absolute (sqm)` or `Percentage` of its container.
-- **Overlapping vs Non-Overlapping Children**:
-  - Use the “Overlapping children (level-separated)” option on a container zone to indicate that its children represent vertically separated levels (e.g., floors/sections that can overlap in plan).
-  - Rules applied for every container (overlapping or non-overlapping):
-    - `Container Area <= Sum of all non-overlapping child zones`
-    - `Container Area <= Area of any overlapping child zone`
-  - Practical interpretation:
-    - Overlapping children do not contribute to the non-overlapping sum; each overlapping child is individually checked against the container.
-    - Non-overlapping children are summed and checked collectively against the container.
-- **Examples**:
-  - Container = 100 sqm
-    - Non-overlapping children: A=40 sqm, B=50 sqm → Sum=90 ≤ 100 OK
-    - Overlapping child: C=120 sqm → 120 ≤ 100 FAIL (exceeds container)
-    - Mixed: A=40, B=50 (non-overlap sum=90), C=95 (overlap) → Sum(non-overlap)=90 ≤ 100 OK; Any(overlap)=95 ≤ 100 OK
-  - Percentage allocations:
-    - If container = 200 sqm, child at 25% → 50 sqm; validations convert percentages to absolute against the container area.
- - **Add Sub-Zone**:
-   - In the project’s Zone Hierarchy, click a zone’s “Add Sub-Zone” button.
-   - Fill in the form (Name, Use Type, Area, Unit, Overlapping option) and submit.
-   - The list refreshes automatically, showing your new sub-zone nested under its parent.
+Organize your project structure logically using the **Zone Tree**.
+- **Structure**: Create a nested hierarchy (e.g., `Floor -> Wing -> Room`). Use the **+** button to add sub-zones.
+- **Visual Feedback**: The tree displays real-time area calculations.
+    - **Non-overlap sum**: Checks if the total area of non-overlapping sub-zones fits within the parent.
+    - **Overlap any**: Checks if overlapping zones fit.
+- **Navigation**: Click the "Plan Space" icon (layout template) next to any zone to open the Space Planner for that specific area.
+- **Constraints**: Set area limits (e.g., "Residential Wing" must be 500 sqm). The system validates sub-zones against these limits.
 
 ### Space Planner
 The interactive heart of the application.
+- **Access**: Launch the planner from the Project Dashboard by clicking the "Plan Space" icon on a specific zone.
 - **Drag-and-Drop**: Drag elements (furniture, rooms) from the palette onto the canvas.
 - **Real-time Validation**: The planner calculates used area vs. allocated area instantly.
 - **Visual Feedback**: The interface highlights overflow errors in red if you exceed zone limits.

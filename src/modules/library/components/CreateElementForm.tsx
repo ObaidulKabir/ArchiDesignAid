@@ -25,7 +25,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
     reset,
     watch,
     setValue,
-  } = useForm<DesignElementFormData>({
+  } = useForm<any>({
     resolver: zodResolver(designElementSchema),
     defaultValues: initialData || {
       isSystem: true,

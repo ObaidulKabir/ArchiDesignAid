@@ -4,7 +4,7 @@ import connectDB from '@/lib/db';
 import ZoneLayout, { IZoneLayout } from '../zoning/models/ZoneLayout';
 import { revalidatePath } from 'next/cache';
 
-export async function saveZoneLayout(zoneId: string, elements: any[], container?: { width: number; length: number }) {
+export async function saveZoneLayout(zoneId: string, elements: any[], container?: { width: number; length: number }, childZones?: any[]) {
   try {
     await connectDB();
 
@@ -30,6 +30,7 @@ export async function saveZoneLayout(zoneId: string, elements: any[], container?
         zoneId, 
         elements: formattedElements,
         ...(container ? { container } : {}),
+        ...(childZones ? { childZones } : {}),
         $inc: { version: 1 } 
       },
       { upsert: true, new: true }
@@ -55,6 +56,17 @@ export async function getZoneLayout(zoneId: string) {
         ...layout,
         _id: layout._id.toString(),
         container: layout.container ? { width: layout.container.width, length: layout.container.length } : undefined,
+        childZones: layout.childZones
+          ? layout.childZones.map((cz: any) => ({
+              zoneId: cz.zoneId.toString(),
+              name: cz.name,
+              x: cz.x,
+              y: cz.y,
+              width: cz.width,
+              length: cz.length,
+              isOverLapping: cz.isOverLapping,
+            }))
+          : undefined,
         elements: layout.elements.map((el: any) => ({
             instanceId: el.instanceId,
             elementId: el.elementId.toString(),
