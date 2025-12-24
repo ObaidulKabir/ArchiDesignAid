@@ -16,6 +16,7 @@ export interface IZoneLayout extends Document {
     width: number;   // meters
     length: number;  // meters
   };
+  unit?: 'metric' | 'imperial';
   childZones?: Array<{
     zoneId: mongoose.Types.ObjectId;
     name: string;
@@ -57,6 +58,7 @@ const ZoneLayoutSchema = new Schema<IZoneLayout>(
       width: { type: Number },
       length: { type: Number },
     },
+    unit: { type: String, enum: ['metric', 'imperial'], default: 'metric' },
     childZones: [
       {
         zoneId: { type: Schema.Types.ObjectId, ref: 'Zone', required: true },

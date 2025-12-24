@@ -83,3 +83,20 @@ export async function deleteProject(id: string) {
         return { success: false, error: 'Failed to delete project' };
     }
 }
+
+export async function updateProject(id: string, data: ProjectFormData) {
+  try {
+    await connectDB();
+    const validatedData = projectSchema.parse(data);
+    const updated = await Project.findByIdAndUpdate(id, validatedData, { new: true, runValidators: true });
+    if (!updated) {
+      return { success: false, error: 'Project not found' };
+    }
+    revalidatePath(`/projects/${id}`);
+    revalidatePath('/projects');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update project:', error);
+    return { success: false, error: 'Failed to update project' };
+  }
+}

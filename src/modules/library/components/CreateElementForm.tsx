@@ -107,7 +107,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input id="name" {...register('name')} placeholder="e.g. Master Bedroom" />
-              {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
+              {typeof errors.name?.message === 'string' && <p className="text-sm text-red-500">{errors.name.message}</p>}
             </div>
             
             <div className="space-y-2">
@@ -129,7 +129,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
                 <option value="Furniture">Furniture</option>
                 <option value="Other">Other</option>
               </select>
-              {errors.category && <p className="text-sm text-red-500">{errors.category.message}</p>}
+              {typeof errors.category?.message === 'string' && <p className="text-sm text-red-500">{errors.category.message}</p>}
             </div>
           </div>
 
@@ -151,7 +151,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
                  }}
                  onBlur={handleCalculateArea}
                />
-               {errors.dimensions?.width?.standard && <p className="text-sm text-red-500">{errors.dimensions.width.standard.message}</p>}
+               {typeof (errors as any)?.dimensions?.width?.standard?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).dimensions.width.standard.message}</p>}
             </div>
             <div className="space-y-2">
                <Label>Standard Length ({unit==='metric'?'m':'ft'})</Label>
@@ -165,7 +165,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
                  }}
                  onBlur={handleCalculateArea}
                />
-               {errors.dimensions?.length?.standard && <p className="text-sm text-red-500">{errors.dimensions.length.standard.message}</p>}
+               {typeof (errors as any)?.dimensions?.length?.standard?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).dimensions.length.standard.message}</p>}
             </div>
              <div className="space-y-2">
                <Label>Standard Area ({unit==='metric'?'sqm':'sqft'})</Label>
@@ -178,7 +178,7 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
                    setValue('area.standard', unit==='metric' ? v : sqftToSqm(v), { shouldDirty: true });
                  }}
                />
-               {errors.area?.standard && <p className="text-sm text-red-500">{errors.area.standard.message}</p>}
+               {typeof (errors as any)?.area?.standard?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).area.standard.message}</p>}
             </div>
           </div>
           

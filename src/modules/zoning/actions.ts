@@ -7,9 +7,10 @@ import { zoneSchema, ZoneFormData } from './schema';
 import { revalidatePath } from 'next/cache';
 
 // Type for the tree structure
-export interface ZoneNode extends Omit<IZone, keyof Document> {
+export interface ZoneNode {
   _id: string;
   children: ZoneNode[];
+  [key: string]: any;
 }
 
 async function validateZoneArea(data: ZoneFormData, excludeZoneId?: string) {

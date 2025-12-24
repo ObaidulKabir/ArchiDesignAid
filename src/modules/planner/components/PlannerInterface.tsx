@@ -58,6 +58,9 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
         if (layout && layout.elements) {
             setElements(layout.elements);
         }
+        if (layout && layout.unit) {
+            setUnit(layout.unit);
+        }
         const defaultSide = Math.sqrt(totalArea);
         if (layout && layout.container && layout.container.width && layout.container.length) {
             setContainer({ width: layout.container.width, length: layout.container.length });
@@ -109,6 +112,8 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
       elements, 
       container || undefined,
       childRects.map(r => ({ zoneId: r.zoneId, name: r.name, x: r.x, y: r.y, width: r.width, length: r.length }))
+      ,
+      unit
     );
     setIsSaving(false);
     if (result.success) {
@@ -356,27 +361,52 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
           const boundsW = container?.width ?? Math.sqrt(totalArea);
           const boundsL = container?.length ?? Math.sqrt(totalArea);
           const el = elements.find(x => x.instanceId === selectedId);
-          if (!el) return;
-          if (e.key === 'ArrowLeft') {
-            const x = Math.max(0, el.x - step);
-            updateElement(selectedId, { x });
-          } else if (e.key === 'ArrowRight') {
-            const x = Math.min(boundsW - el.width, el.x + step);
-            updateElement(selectedId, { x });
-          } else if (e.key === 'ArrowUp') {
-            const y = Math.max(0, el.y - step);
-            updateElement(selectedId, { y });
-          } else if (e.key === 'ArrowDown') {
-            const y = Math.min(boundsL - el.length, el.y + step);
-            updateElement(selectedId, { y });
-          } else if (e.key === 'a') {
-            updateSelectedDimensions(selectedId, el.width - step, undefined);
-          } else if (e.key === 'd') {
-            updateSelectedDimensions(selectedId, el.width + step, undefined);
-          } else if (e.key === 'w') {
-            updateSelectedDimensions(selectedId, undefined, el.length - step);
-          } else if (e.key === 's') {
-            updateSelectedDimensions(selectedId, undefined, el.length + step);
+          if (el) {
+            if (e.key === 'ArrowLeft') {
+              const x = Math.max(0, el.x - step);
+              updateElement(selectedId, { x });
+            } else if (e.key === 'ArrowRight') {
+              const x = Math.min(boundsW - el.width, el.x + step);
+              updateElement(selectedId, { x });
+            } else if (e.key === 'ArrowUp') {
+              const y = Math.max(0, el.y - step);
+              updateElement(selectedId, { y });
+            } else if (e.key === 'ArrowDown') {
+              const y = Math.min(boundsL - el.length, el.y + step);
+              updateElement(selectedId, { y });
+            } else if (e.key === 'a') {
+              updateSelectedDimensions(selectedId, el.width - step, undefined);
+            } else if (e.key === 'd') {
+              updateSelectedDimensions(selectedId, el.width + step, undefined);
+            } else if (e.key === 'w') {
+              updateSelectedDimensions(selectedId, undefined, el.length - step);
+            } else if (e.key === 's') {
+              updateSelectedDimensions(selectedId, undefined, el.length + step);
+            }
+          } else {
+            const r = childRects.find(x => x.zoneId === selectedId);
+            if (!r) return;
+            if (e.key === 'ArrowLeft') {
+              const x = Math.max(0, r.x - step);
+              updateChildRect(selectedId, { x });
+            } else if (e.key === 'ArrowRight') {
+              const x = Math.min(boundsW - r.width, r.x + step);
+              updateChildRect(selectedId, { x });
+            } else if (e.key === 'ArrowUp') {
+              const y = Math.max(0, r.y - step);
+              updateChildRect(selectedId, { y });
+            } else if (e.key === 'ArrowDown') {
+              const y = Math.min(boundsL - r.length, r.y + step);
+              updateChildRect(selectedId, { y });
+            } else if (e.key === 'a') {
+              updateChildSelectedDimensions(selectedId, r.width - step, undefined);
+            } else if (e.key === 'd') {
+              updateChildSelectedDimensions(selectedId, r.width + step, undefined);
+            } else if (e.key === 'w') {
+              updateChildSelectedDimensions(selectedId, undefined, r.length - step);
+            } else if (e.key === 's') {
+              updateChildSelectedDimensions(selectedId, undefined, r.length + step);
+            }
           }
         }
     };
@@ -494,6 +524,15 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
     let y = Math.max(0, Math.min(el.y, boundsL - nextLength));
     return { width: nextWidth, length: nextLength, x, y };
   };
+  const applyZoneBounds = (r: { x: number; y: number; width: number; length: number }, next: { width?: number; length?: number }) => {
+    const nextWidth = typeof next.width === 'number' ? next.width : r.width;
+    const nextLength = typeof next.length === 'number' ? next.length : r.length;
+    const boundsW = container?.width ?? Math.sqrt(totalArea);
+    const boundsL = container?.length ?? Math.sqrt(totalArea);
+    let x = Math.max(0, Math.min(r.x, boundsW - nextWidth));
+    let y = Math.max(0, Math.min(r.y, boundsL - nextLength));
+    return { width: nextWidth, length: nextLength, x, y };
+  };
   const updateSelectedDimensions = (id: string, nextWidth?: number, nextLength?: number) => {
     const el = elements.find(e => e.instanceId === id);
     if (!el) return;
@@ -530,6 +569,34 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
     }
     const bounded = applyBounds(el, { width: w, length: l });
     updateElement(id, bounded);
+  };
+  const updateChildSelectedDimensions = (zoneId: string, nextWidth?: number, nextLength?: number) => {
+    const r = childRects.find(c => c.zoneId === zoneId);
+    if (!r) return;
+    let w = typeof nextWidth === 'number' ? nextWidth : r.width;
+    let l = typeof nextLength === 'number' ? nextLength : r.length;
+    const minDim = 0.1;
+    const boundsW = container?.width ?? Math.sqrt(totalArea);
+    const boundsL = container?.length ?? Math.sqrt(totalArea);
+    w = Math.max(minDim, Math.min(w, boundsW));
+    l = Math.max(minDim, Math.min(l, boundsL));
+    if (lockArea && typeof nextWidth === 'number' && typeof nextLength !== 'number') {
+      const area = r.width * r.length;
+      l = area / w;
+      l = Math.max(minDim, Math.min(l, boundsL));
+    } else if (lockArea && typeof nextLength === 'number' && typeof nextWidth !== 'number') {
+      const area = r.width * r.length;
+      w = area / l;
+      w = Math.max(minDim, Math.min(w, boundsW));
+    }
+    const maxArea = r.maxArea;
+    if (w * l > maxArea) {
+      const scale = Math.sqrt(maxArea / (w * l));
+      w = w * scale;
+      l = l * scale;
+    }
+    const bounded = applyZoneBounds(r, { width: w, length: l });
+    updateChildRect(zoneId, bounded);
   };
 
   const updateSelectedArea = (id: string, nextArea: number) => {
@@ -572,6 +639,24 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
 
     const bounded = applyBounds(el, { width: w, length: l });
     updateElement(id, bounded);
+  };
+  const updateChildArea = (zoneId: string, nextArea: number) => {
+    const r = childRects.find(c => c.zoneId === zoneId);
+    if (!r) return;
+    const maxArea = r.maxArea;
+    const minArea = Math.min(maxArea, 0.1);
+    const targetArea = Math.max(minArea, Math.min(nextArea, maxArea));
+    const currentArea = r.width * r.length;
+    if (currentArea <= 0) return;
+    const scale = Math.sqrt(targetArea / currentArea);
+    let w = r.width * scale;
+    let l = r.length * scale;
+    const boundsW = container?.width ?? Math.sqrt(totalArea);
+    const boundsL = container?.length ?? Math.sqrt(totalArea);
+    w = Math.max(0.1, Math.min(w, boundsW));
+    l = Math.max(0.1, Math.min(l, boundsL));
+    const bounded = applyZoneBounds(r, { width: w, length: l });
+    updateChildRect(zoneId, bounded);
   };
 
   if (isLoading) {
@@ -676,52 +761,101 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                   <Label className="text-xs">Lock Area</Label>
                   <input type="checkbox" checked={lockArea} onChange={(e) => setLockArea(e.target.checked)} />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2 space-y-2">
-                    <Label className="text-xs">Area ({unit==='metric'?'sqm':'sqft'})</Label>
-                    <div className="flex flex-col gap-1">
-                        <div className="flex justify-between text-[10px] text-gray-500">
-                             <span>{fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.min ?? 0).toFixed(1)}</span>
-                             <span className="font-bold text-blue-600">
-                                {fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!).toFixed(2)}
-                             </span>
-                             <span>{fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.max ?? (getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.standard * 2)).toFixed(1)}</span>
-                        </div>
-                        <input
-                          type="range"
-                          step="0.1"
-                          min={fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.min ?? 0)}
-                          max={fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.max ?? (getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.standard * 2))}
-                          value={fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!)}
-                          onChange={(e) => {
-                             const val = parseFloat(e.target.value);
-                             if (!isNaN(val)) {
-                                 updateSelectedArea(selectedId, unit === 'metric' ? val : sqftToSqm(val));
-                             }
-                          }}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                        />
+                {mode === 'elements' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs">Area ({unit==='metric'?'sqm':'sqft'})</Label>
+                      <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-[10px] text-gray-500">
+                               <span>{fmtArea(((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.min) ?? 0).toFixed(1)}</span>
+                               <span className="font-bold text-blue-600">
+                                  {fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!).toFixed(2)}
+                               </span>
+                               <span>{fmtArea((((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.max) ?? ((((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.standard) * 2))) ).toFixed(1)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            step="0.1"
+                            min={fmtArea((((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.min) ?? 0))}
+                            max={fmtArea((((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.max) ?? ((((getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId || '') as any)?.area?.standard) * 2))))}
+                            value={fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!)}
+                            onChange={(e) => {
+                               const val = parseFloat(e.target.value);
+                               if (!isNaN(val)) {
+                                   updateSelectedArea(selectedId, unit === 'metric' ? val : sqftToSqm(val));
+                               }
+                            }}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                          />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Width ({unit==='metric'?'m':'ft'})</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={fmtLen(elements.find(e => e.instanceId === selectedId)?.width ?? 0)}
+                        onChange={(e) => updateSelectedDimensions(selectedId, parseLenToM(parseFloat(e.target.value)), undefined)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Length ({unit==='metric'?'m':'ft'})</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={fmtLen(elements.find(e => e.instanceId === selectedId)?.length ?? 0)}
+                        onChange={(e) => updateSelectedDimensions(selectedId, undefined, parseLenToM(parseFloat(e.target.value)))}
+                      />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Width ({unit==='metric'?'m':'ft'})</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={fmtLen(elements.find(e => e.instanceId === selectedId)?.width ?? 0)}
-                      onChange={(e) => updateSelectedDimensions(selectedId, parseLenToM(parseFloat(e.target.value)), undefined)}
-                    />
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs">Area ({unit==='metric'?'sqm':'sqft'})</Label>
+                      <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-[10px] text-gray-500">
+                               <span>{fmtArea(Math.min(0.1, childRects.find(r => r.zoneId === selectedId)?.maxArea || 0)).toFixed(1)}</span>
+                               <span className="font-bold text-blue-600">
+                                  {fmtArea((childRects.find(r => r.zoneId === selectedId)?.width || 0) * (childRects.find(r => r.zoneId === selectedId)?.length || 0)).toFixed(2)}
+                               </span>
+                               <span>{fmtArea(childRects.find(r => r.zoneId === selectedId)?.maxArea || 0).toFixed(1)}</span>
+                          </div>
+                          <input
+                            type="range"
+                            step="0.1"
+                            min={fmtArea(Math.min(0.1, childRects.find(r => r.zoneId === selectedId)?.maxArea || 0))}
+                            max={fmtArea(childRects.find(r => r.zoneId === selectedId)?.maxArea || 0)}
+                            value={fmtArea((childRects.find(r => r.zoneId === selectedId)?.width || 0) * (childRects.find(r => r.zoneId === selectedId)?.length || 0))}
+                            onChange={(e) => {
+                               const val = parseFloat(e.target.value);
+                               if (!isNaN(val)) {
+                                   updateChildArea(selectedId, unit === 'metric' ? val : sqftToSqm(val));
+                               }
+                            }}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                          />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Width ({unit==='metric'?'m':'ft'})</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={fmtLen(childRects.find(r => r.zoneId === selectedId)?.width || 0)}
+                        onChange={(e) => updateChildSelectedDimensions(selectedId, parseLenToM(parseFloat(e.target.value)), undefined)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Length ({unit==='metric'?'m':'ft'})</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={fmtLen(childRects.find(r => r.zoneId === selectedId)?.length || 0)}
+                        onChange={(e) => updateChildSelectedDimensions(selectedId, undefined, parseLenToM(parseFloat(e.target.value)))}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Length ({unit==='metric'?'m':'ft'})</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={fmtLen(elements.find(e => e.instanceId === selectedId)?.length ?? 0)}
-                      onChange={(e) => updateSelectedDimensions(selectedId, undefined, parseLenToM(parseFloat(e.target.value)))}
-                    />
-                  </div>
-                </div>
+                )}
               </>
             ) : (
               <div className="text-xs text-gray-500">Select an element to edit dimensions</div>

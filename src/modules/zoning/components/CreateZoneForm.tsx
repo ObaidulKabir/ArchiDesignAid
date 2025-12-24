@@ -24,7 +24,7 @@ export default function CreateZoneForm({ projectId, parentId, initialData, onSuc
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
-  } = useForm<ZoneFormData>({
+  } = useForm<any>({
     resolver: zodResolver(zoneSchema),
     defaultValues: initialData || {
       projectId,
@@ -69,7 +69,7 @@ export default function CreateZoneForm({ projectId, parentId, initialData, onSuc
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input id="name" {...register('name')} placeholder="e.g. Ground Floor, Master Bedroom" />
-            {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
+            {typeof (errors as any)?.name?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).name.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -112,7 +112,7 @@ export default function CreateZoneForm({ projectId, parentId, initialData, onSuc
             <div className="space-y-2">
               <Label htmlFor="area">Area</Label>
               <Input id="area" type="number" step="0.01" {...register('areaAllocation.value')} />
-              {errors.areaAllocation?.value && <p className="text-sm text-red-500">{errors.areaAllocation.value.message}</p>}
+              {typeof (errors as any)?.areaAllocation?.value?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).areaAllocation.value.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="unit">Unit</Label>

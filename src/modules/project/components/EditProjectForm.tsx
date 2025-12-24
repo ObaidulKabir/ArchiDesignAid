@@ -5,10 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { projectSchema, ProjectFormData } from '../schema';
-import { createProject } from '../actions';
+import { updateProject } from '../actions';
 import { Button, Input, Label, Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui';
 
-export default function CreateProjectForm() {
+interface EditProjectFormProps {
+  projectId: string;
+  initialData: ProjectFormData;
+}
+
+export default function EditProjectForm({ projectId, initialData }: EditProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const {
@@ -17,17 +22,14 @@ export default function CreateProjectForm() {
     formState: { errors, isSubmitting },
   } = useForm<any>({
     resolver: zodResolver(projectSchema),
-    defaultValues: {
-      landArea: { unit: 'sqm', value: 0 },
-    },
+    defaultValues: initialData,
   });
 
   const onSubmit = async (data: ProjectFormData) => {
     setError(null);
-    const result = await createProject(data);
-    
+    const result = await updateProject(projectId, data);
     if (result.success) {
-      router.push('/projects');
+      router.push(`/projects/${projectId}`);
     } else {
       setError(result.error || 'Something went wrong');
     }
@@ -36,19 +38,19 @@ export default function CreateProjectForm() {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Create New Project</CardTitle>
+        <CardTitle>Edit Project</CardTitle>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Project Name</Label>
-            <Input id="name" {...register('name')} placeholder="e.g. Riverside Apartments" />
-            {typeof errors.name?.message === 'string' && <p className="text-sm text-red-500">{errors.name.message}</p>}
+            <Input id="name" {...register('name')} />
+            {typeof (errors as any)?.name?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).name.message}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
-            <Input id="address" {...register('location.address')} placeholder="e.g. 123 Main St, New York" />
+            <Input id="address" {...register('location.address')} />
             {typeof (errors as any)?.location?.address?.message === 'string' && <p className="text-sm text-red-500">{(errors as any).location.address.message}</p>}
           </div>
 
@@ -79,16 +81,15 @@ export default function CreateProjectForm() {
               id="description"
               {...register('description')}
               className="flex min-h-[80px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Project description..."
             />
           </div>
 
           {error && <div className="text-sm text-red-500">{error}</div>}
         </CardContent>
         <CardFooter className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => router.push(`/projects/${projectId}`)}>Cancel</Button>
             <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Creating...' : 'Create Project'}
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
         </CardFooter>
       </form>

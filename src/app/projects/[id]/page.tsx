@@ -40,8 +40,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             </div>
         </div>
         <div className="flex gap-2">
-            <Button variant="outline">Edit Project</Button>
-            <Button>Launch Planner</Button>
+            <Link href={`/projects/${id}/edit`}>
+              <Button variant="outline">Edit Project</Button>
+            </Link>
+            <Link href={`/projects/${id}`}>
+              <Button>Launch Planner</Button>
+            </Link>
         </div>
       </div>
 
