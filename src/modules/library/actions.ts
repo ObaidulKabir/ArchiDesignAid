@@ -34,6 +34,29 @@ export async function createDesignElement(data: DesignElementFormData) {
   }
 }
 
+export async function updateDesignElement(id: string, data: DesignElementFormData) {
+  try {
+    await connectDB();
+    const validatedData = designElementSchema.parse(data);
+    
+    const updatedElement = await DesignElement.findByIdAndUpdate(
+      id,
+      validatedData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedElement) {
+      return { success: false, error: 'Element not found' };
+    }
+
+    revalidatePath('/library');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update element:', error);
+    return { success: false, error: 'Failed to update element' };
+  }
+}
+
 export async function seedLibrary() {
   try {
     await connectDB();

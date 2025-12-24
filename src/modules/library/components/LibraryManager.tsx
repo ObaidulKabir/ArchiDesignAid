@@ -2,21 +2,12 @@
 
 import { useState } from 'react';
 import { Button, Input, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
-import { Plus, Search, Ruler, Box } from 'lucide-react';
+import { Plus, Search, Ruler, Box, Edit } from 'lucide-react';
 import CreateElementForm from './CreateElementForm';
+import { DesignElementFormData } from '../schema';
 
-interface DesignElement {
+interface DesignElement extends DesignElementFormData {
   _id: string;
-  name: string;
-  category: string;
-  dimensions: {
-    width: { standard: number; min?: number };
-    length: { standard: number; min?: number };
-  };
-  area: {
-    standard: number;
-    min?: number;
-  };
 }
 
 interface LibraryManagerProps {
@@ -26,6 +17,7 @@ interface LibraryManagerProps {
 
 export default function LibraryManager({ elements, onSeed }: LibraryManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingElement, setEditingElement] = useState<DesignElement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -65,31 +57,53 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
            {elements.length === 0 && onSeed && (
              <Button variant="outline" onClick={onSeed}>Seed Defaults</Button>
            )}
-           <Button onClick={() => setIsAdding(!isAdding)}>
-             {isAdding ? 'Cancel' : 'Add Element'}
+           <Button onClick={() => {
+             setIsAdding(!isAdding);
+             setEditingElement(null);
+           }}>
+             {isAdding || editingElement ? 'Cancel' : 'Add Element'}
            </Button>
         </div>
       </div>
 
-      {isAdding && (
+      {(isAdding || editingElement) && (
         <div className="max-w-2xl mx-auto mb-8 border rounded-lg p-6 bg-gray-50">
           <CreateElementForm 
-            onSuccess={() => setIsAdding(false)} 
-            onCancel={() => setIsAdding(false)} 
+            onSuccess={() => {
+              setIsAdding(false);
+              setEditingElement(null);
+            }} 
+            onCancel={() => {
+              setIsAdding(false);
+              setEditingElement(null);
+            }}
+            initialData={editingElement || undefined}
           />
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredElements.map((element) => (
-          <Card key={element._id} className="hover:shadow-md transition-shadow">
+          <Card key={element._id} className="hover:shadow-md transition-shadow relative group">
             <CardHeader className="pb-2">
-              <CardTitle className="flex justify-between items-start text-base">
+              <CardTitle className="flex justify-between items-start text-base pr-8">
                 <span>{element.name}</span>
                 <span className="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                   {element.category}
                 </span>
               </CardTitle>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                onClick={() => {
+                  setEditingElement(element);
+                  setIsAdding(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-gray-600">
               <div className="flex items-center gap-2">
@@ -97,7 +111,7 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
                 <div className="flex flex-col">
                   <span className="text-xs text-gray-500">Dimensions</span>
                   <span className="font-medium">
-                    {element.dimensions.width.standard}m x {element.dimensions.length.standard}m
+                    {Number(element.dimensions.width.standard).toFixed(2)}m x {Number(element.dimensions.length.standard).toFixed(2)}m
                   </span>
                 </div>
               </div>

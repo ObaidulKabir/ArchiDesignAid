@@ -221,3 +221,21 @@ export async function deleteZone(id: string, projectId: string) {
     return { success: false, error: 'Failed to delete zone' };
   }
 }
+
+export async function getChildZones(parentId: string) {
+  try {
+    await connectDB();
+    const zones = await Zone.find({ parentId }).sort({ order: 1, createdAt: 1 }).lean();
+    return zones.map(z => ({
+      ...z,
+      _id: z._id.toString(),
+      projectId: z.projectId.toString(),
+      parentId: z.parentId?.toString(),
+      createdAt: z.createdAt?.toISOString(),
+      updatedAt: z.updatedAt?.toISOString(),
+    }));
+  } catch (error) {
+    console.error('Failed to fetch child zones:', error);
+    return [];
+  }
+}

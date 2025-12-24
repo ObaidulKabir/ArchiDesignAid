@@ -16,6 +16,7 @@ export interface IDesignElement extends Document {
   
   area: {
     min?: number;
+    max?: number;
     standard: number;
   };
   
@@ -56,6 +57,7 @@ const DesignElementSchema = new Schema<IDesignElement>(
     
     area: {
       min: Number,
+      max: Number,
       standard: { type: Number, required: true },
     },
     

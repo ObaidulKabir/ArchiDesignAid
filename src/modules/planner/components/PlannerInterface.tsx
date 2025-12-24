@@ -21,10 +21,11 @@ interface PlacedElement {
 interface PlannerInterfaceProps {
   zone: any; // Using any for now to avoid strict type mismatch during rapid prototyping
   libraryElements: any[];
+  childZones?: any[]; // Child zones to be placed
   totalArea: number; // sqm
 }
 
-export default function PlannerInterface({ zone, libraryElements, totalArea }: PlannerInterfaceProps) {
+export default function PlannerInterface({ zone, libraryElements, childZones = [], totalArea }: PlannerInterfaceProps) {
   const [elements, setElements] = useState<PlacedElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,8 +34,11 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
   const [container, setContainer] = useState<{ width: number; length: number } | null>(null);
   const [aspect, setAspect] = useState<number>(1); // width/length ratio
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [mouseStart, setMouseStart] = useState<{ x: number; y: number } | null>(null);
+  const [resizeStartDims, setResizeStartDims] = useState<{ w: number; h: number; x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState<number>(1); // view scale only
   const [lockArea, setLockArea] = useState<boolean>(true);
   const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
@@ -134,6 +138,96 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
   
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
+      if (resizingId && resizeStartDims && mouseStart && resizeHandle) {
+        const dx = (e.clientX - mouseStart.x) / PX;
+        const dy = (e.clientY - mouseStart.y) / PX;
+        
+        // Find constraints
+        const el = elements.find(x => x.instanceId === resizingId);
+        if (!el) return;
+        const lib = getLibraryElement(el.elementId);
+        
+        // Initial dimensions
+        let newW = resizeStartDims.w;
+        let newL = resizeStartDims.h;
+        let newX = resizeStartDims.x;
+        let newY = resizeStartDims.y;
+
+        // Calculate raw new dimensions based on handle
+        // Assuming rotation 0 for simplicity of resizing logic right now
+        // Handles: 'nw', 'ne', 'sw', 'se'
+        if (resizeHandle.includes('e')) newW += dx;
+        if (resizeHandle.includes('w')) { newW -= dx; newX += dx; }
+        if (resizeHandle.includes('s')) newL += dy;
+        if (resizeHandle.includes('n')) { newL -= dy; newY += dy; }
+        
+        // Apply min/max width/length constraints
+        const wMin = lib?.dimensions?.width?.min ?? 0.1;
+        const wMax = lib?.dimensions?.width?.max ?? 100;
+        const lMin = lib?.dimensions?.length?.min ?? 0.1;
+        const lMax = lib?.dimensions?.length?.max ?? 100;
+
+        // Simple clamp first
+        if (newW < wMin) {
+            if (resizeHandle.includes('w')) newX -= (wMin - newW); // Adjust X back if clamped
+            newW = wMin;
+        }
+        if (newW > wMax) {
+             if (resizeHandle.includes('w')) newX -= (wMax - newW);
+             newW = wMax;
+        }
+        if (newL < lMin) {
+            if (resizeHandle.includes('n')) newY -= (lMin - newL);
+            newL = lMin;
+        }
+        if (newL > lMax) {
+             if (resizeHandle.includes('n')) newY -= (lMax - newL);
+             newL = lMax;
+        }
+
+        // Apply Aspect Ratio Lock if enabled
+        if (lockArea) {
+             // Basic implementation: if dragging corner, try to maintain W/L ratio
+             // This is standard UX for "Shift+Drag" usually, but user asked for "Lock Area" checkbox behavior
+             // But "Lock Area" (const area) is weird for corner drag.
+             // Let's assume they mean "Maintain Aspect Ratio" for now as that's what corner dragging usually implies when constrained.
+             // However, let's look at the previous implementation of updateSelectedDimensions with lockArea
+             
+             // If we want to strictly enforce AREA constraints (min/max area), we check it after dimensions
+        }
+        
+        // --- STRICT CONSTRAINT CHECKING ---
+        
+        // 1. Check Area Constraints
+        let currentArea = newW * newL;
+        const areaMin = lib?.area?.min ?? 0;
+        // Default max is 2 * standard if not specified
+        const areaStandard = lib?.area?.standard ?? (el.width * el.length);
+        const areaMax = lib?.area?.max ?? (areaStandard * 2);
+
+        if (currentArea < areaMin) {
+            // Scale up to meet min area
+            const scale = Math.sqrt(areaMin / currentArea);
+            newW *= scale;
+            newL *= scale;
+        } else if (currentArea > areaMax) {
+             // Scale down to meet max area
+             const scale = Math.sqrt(areaMax / currentArea);
+             newW *= scale;
+             newL *= scale;
+        }
+
+        // 2. Re-Apply Dimension Constraints (in case Area scaling broke them)
+        // This acts as a hard limit. If Area scaling pushes W < minW, we clamp W, which might break Min Area.
+        // In a conflict, Dimension constraints usually win physically, or we stop resizing.
+        // Let's just clamp again.
+        newW = Math.max(wMin, Math.min(newW, wMax));
+        newL = Math.max(lMin, Math.min(newL, lMax));
+
+        updateElement(resizingId, { width: newW, length: newL, x: newX, y: newY });
+        return;
+      }
+
       if (!draggingId || !dragStart || !mouseStart) return;
       const dx = (e.clientX - mouseStart.x) / PX;
       const dy = (e.clientY - mouseStart.y) / PX;
@@ -156,8 +250,14 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
         setDragStart(null);
         setMouseStart(null);
       }
+      if (resizingId) {
+          setResizingId(null);
+          setResizeHandle(null);
+          setResizeStartDims(null);
+          setMouseStart(null);
+      }
     };
-    if (draggingId) {
+    if (draggingId || resizingId) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
     }
@@ -165,7 +265,7 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [draggingId, dragStart, mouseStart, container, totalArea, SCALE]);
+  }, [draggingId, dragStart, mouseStart, container, totalArea, SCALE, resizingId, resizeStartDims, resizeHandle, elements]);
 
   const deleteSelected = () => {
     if (selectedId) {
@@ -273,7 +373,35 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
   };
   const zoomIn = () => setZoom((z) => Math.min(3, parseFloat((z + 0.1).toFixed(2))));
   const zoomOut = () => setZoom((z) => Math.max(0.5, parseFloat((z - 0.1).toFixed(2))));
-  const getLibraryElement = (id: string) => libraryElements.find((e: any) => e._id === id);
+  const getLibraryElement = (id: string) => {
+      // Check both system library and child zones (treated as elements)
+      const sysEl = libraryElements.find((e: any) => e._id === id);
+      if (sysEl) return sysEl;
+      
+      const zoneEl = childZones.find((z: any) => z._id === id);
+      if (zoneEl) {
+          // Adapt zone structure to element structure for the planner
+          const area = zoneEl.calculatedArea;
+          // Estimate dimensions from area (assuming square-ish default)
+          const side = parseFloat(Math.sqrt(area).toFixed(2));
+          return {
+              _id: zoneEl._id,
+              name: zoneEl.name,
+              category: 'Zone',
+              dimensions: {
+                  width: { min: 0.1, max: 1000, standard: side },
+                  length: { min: 0.1, max: 1000, standard: side }
+              },
+              area: {
+                  min: area * 0.5, // Flexible
+                  max: area * 1.5,
+                  standard: area
+              }
+          };
+      }
+      return null;
+  };
+
   const clamp = (v: number, min?: number, max?: number) => {
     let x = v;
     if (typeof min === 'number') x = Math.max(min, x);
@@ -347,6 +475,48 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
     updateElement(id, bounded);
   };
 
+  const updateSelectedArea = (id: string, nextArea: number) => {
+    const el = elements.find(e => e.instanceId === id);
+    if (!el) return;
+    const lib = getLibraryElement(el.elementId);
+    
+    // Determine bounds
+    const areaMin = lib?.area?.min ?? 0;
+    // Default max is 2 * standard if not specified
+    const areaStandard = lib?.area?.standard ?? (el.width * el.length);
+    const areaMax = lib?.area?.max ?? (areaStandard * 2);
+
+    // Clamp area
+    const clampedArea = clamp(nextArea, areaMin, areaMax);
+    
+    // Calculate scaling factor to preserve aspect ratio
+    const currentArea = el.width * el.length;
+    if (currentArea === 0) return; // Prevent div by zero
+    
+    const scale = Math.sqrt(clampedArea / currentArea);
+    let w = el.width * scale;
+    let l = el.length * scale;
+
+    // Check dimension bounds as well (if defined)
+    const wMin = lib?.dimensions?.width?.min;
+    const wMax = lib?.dimensions?.width?.max;
+    const lMin = lib?.dimensions?.length?.min;
+    const lMax = lib?.dimensions?.length?.max;
+
+    // If dimension bounds are strict, they might conflict with area bounds + aspect ratio.
+    // For now, let's prioritize area change, but clamp dimensions if they go out of bounds.
+    // Note: Clamping dimensions might change the area again, effectively fighting the area change.
+    // A better approach might be to try to respect aspect ratio, but if bounds are hit, allow aspect ratio to change.
+    // However, simplest first step is just clamp.
+    if (wMin) w = Math.max(w, wMin);
+    if (wMax) w = Math.min(w, wMax);
+    if (lMin) l = Math.max(l, lMin);
+    if (lMax) l = Math.min(l, lMax);
+
+    const bounded = applyBounds(el, { width: w, length: l });
+    updateElement(id, bounded);
+  };
+
   if (isLoading) {
       return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /> Loading Planner...</div>;
   }
@@ -363,23 +533,44 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
                 <CardTitle className="text-sm">Elements</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-2 space-y-2">
-                {libraryElements.map(el => (
-                    <div 
-                        key={el._id}
+                {childZones.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Sub-Zones</div>
+                    {childZones.map(cz => (
+                      <div 
+                        key={cz._id}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, el)}
-                        className="p-3 bg-white border rounded cursor-move hover:border-blue-500 shadow-sm text-sm"
-                    >
-                        <div className="font-medium">{el.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {unit === 'metric' ? `${el.dimensions.width.standard}m x ${el.dimensions.length.standard}m` : 
-                          `${mToFt(el.dimensions.width.standard).toFixed(2)}ft x ${mToFt(el.dimensions.length.standard).toFixed(2)}ft`}
+                        onDragStart={(e) => handleDragStart(e, cz)}
+                        className="p-3 bg-blue-50 border border-blue-200 rounded cursor-move hover:border-blue-500 shadow-sm text-sm mb-2"
+                      >
+                        <div className="font-medium text-blue-800">{cz.name}</div>
+                        <div className="text-xs text-blue-600">
+                          Area: {fmtArea(cz.calculatedArea).toFixed(2)} {unit==='metric'?'sqm':'sqft'}
                         </div>
+                      </div>
+                    ))}
+                    <div className="h-px bg-gray-200 my-2" />
+                  </div>
+                )}
+                
+                <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Library Elements</div>
+                {libraryElements.map(el => (
+                  <div 
+                    key={el._id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, el)}
+                    className="p-3 bg-white border rounded cursor-move hover:border-blue-500 shadow-sm text-sm"
+                  >
+                    <div className="font-medium">{el.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {unit === 'metric' ? `${el.dimensions.width.standard}m x ${el.dimensions.length.standard}m` : 
+                      `${mToFt(el.dimensions.width.standard).toFixed(2)}ft x ${mToFt(el.dimensions.length.standard).toFixed(2)}ft`}
                     </div>
+                  </div>
                 ))}
             </CardContent>
         </Card>
-        
+
         <Card>
             <CardContent className="p-4 space-y-2">
                 <div className="text-sm font-medium">Zone Stats</div>
@@ -416,6 +607,7 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
                 </div>
             </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="py-3 px-4 bg-gray-50 border-b">
             <CardTitle className="text-sm">Selected Element</CardTitle>
@@ -428,6 +620,32 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
                   <input type="checkbox" checked={lockArea} onChange={(e) => setLockArea(e.target.checked)} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2 space-y-2">
+                    <Label className="text-xs">Area ({unit==='metric'?'sqm':'sqft'})</Label>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex justify-between text-[10px] text-gray-500">
+                             <span>{fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.min ?? 0).toFixed(1)}</span>
+                             <span className="font-bold text-blue-600">
+                                {fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!).toFixed(2)}
+                             </span>
+                             <span>{fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.max ?? (getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.standard * 2)).toFixed(1)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          step="0.1"
+                          min={fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.min ?? 0)}
+                          max={fmtArea(getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.max ?? (getLibraryElement(elements.find(e => e.instanceId === selectedId)?.elementId)?.area?.standard * 2))}
+                          value={fmtArea(elements.find(e => e.instanceId === selectedId)?.width! * elements.find(e => e.instanceId === selectedId)?.length!)}
+                          onChange={(e) => {
+                             const val = parseFloat(e.target.value);
+                             if (!isNaN(val)) {
+                                 updateSelectedArea(selectedId, unit === 'metric' ? val : sqftToSqm(val));
+                             }
+                          }}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Width ({unit==='metric'?'m':'ft'})</Label>
                     <Input
@@ -529,7 +747,7 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
                             opacity: 0.8
                         }}
                     >
-                        <div className="flex flex-col items-center justify-center px-1 text-[11px] leading-tight">
+                        <div className="flex flex-col items-center justify-center px-1 text-[11px] leading-tight select-none">
                           <div className="font-semibold">{el.name}</div>
                           <div className="opacity-90">
                             {unit === 'metric' 
@@ -538,6 +756,29 @@ export default function PlannerInterface({ zone, libraryElements, totalArea }: P
                             }
                           </div>
                         </div>
+
+                        {/* Resize Handles - Only visible when selected */}
+                        {selectedId === el.instanceId && (
+                            <>
+                                {/* Corners */}
+                                <div 
+                                    className="absolute -left-1 -top-1 w-3 h-3 bg-white border border-blue-600 cursor-nw-resize z-20"
+                                    onMouseDown={(e) => { e.stopPropagation(); setResizingId(el.instanceId); setResizeHandle('nw'); setMouseStart({x: e.clientX, y: e.clientY}); setResizeStartDims({w: el.width, h: el.length, x: el.x, y: el.y}); }}
+                                />
+                                <div 
+                                    className="absolute -right-1 -top-1 w-3 h-3 bg-white border border-blue-600 cursor-ne-resize z-20"
+                                    onMouseDown={(e) => { e.stopPropagation(); setResizingId(el.instanceId); setResizeHandle('ne'); setMouseStart({x: e.clientX, y: e.clientY}); setResizeStartDims({w: el.width, h: el.length, x: el.x, y: el.y}); }}
+                                />
+                                <div 
+                                    className="absolute -left-1 -bottom-1 w-3 h-3 bg-white border border-blue-600 cursor-sw-resize z-20"
+                                    onMouseDown={(e) => { e.stopPropagation(); setResizingId(el.instanceId); setResizeHandle('sw'); setMouseStart({x: e.clientX, y: e.clientY}); setResizeStartDims({w: el.width, h: el.length, x: el.x, y: el.y}); }}
+                                />
+                                <div 
+                                    className="absolute -right-1 -bottom-1 w-3 h-3 bg-white border border-blue-600 cursor-se-resize z-20"
+                                    onMouseDown={(e) => { e.stopPropagation(); setResizingId(el.instanceId); setResizeHandle('se'); setMouseStart({x: e.clientX, y: e.clientY}); setResizeStartDims({w: el.width, h: el.length, x: el.x, y: el.y}); }}
+                                />
+                            </>
+                        )}
                     </div>
                 ))}
             </div>

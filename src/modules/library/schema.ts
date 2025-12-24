@@ -23,6 +23,7 @@ export const designElementSchema = z.object({
   }),
   area: z.object({
     min: z.coerce.number().optional(),
+    max: z.coerce.number().optional(),
     standard: z.coerce.number(),
   }),
   isSystem: z.boolean().default(false),

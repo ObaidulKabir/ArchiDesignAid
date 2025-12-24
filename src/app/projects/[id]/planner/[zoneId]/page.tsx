@@ -1,4 +1,4 @@
-import { getZoneById } from '@/modules/zoning/actions';
+import { getZoneById, getChildZones } from '@/modules/zoning/actions';
 import { getSystemLibrary } from '@/modules/library/actions';
 import PlannerInterface from '@/modules/planner/components/PlannerInterface';
 import { getProjectById } from '@/modules/project/actions';
@@ -14,8 +14,9 @@ export default async function PlannerPage({ params }: { params: { id: string; zo
   if (!zone) {
     notFound();
   }
-  const [libraryElements, project] = await Promise.all([
+  const [libraryElements, childZones, project] = await Promise.all([
     getSystemLibrary(),
+    getChildZones(zoneId),
     getProjectById(zone.projectId),
   ]);
 
@@ -35,6 +36,14 @@ export default async function PlannerPage({ params }: { params: { id: string; zo
   };
   const totalArea = await getAbsArea(zone);
 
+  // Compute areas for child zones if they are percentage based
+  const processedChildZones = childZones.map(cz => ({
+    ...cz,
+    calculatedArea: cz.areaAllocation.unit === 'absolute' 
+      ? cz.areaAllocation.value 
+      : totalArea * (cz.areaAllocation.value / 100)
+  }));
+
   return (
     <div className="container mx-auto py-4 px-4 h-screen flex flex-col">
       <div className="flex items-center gap-4 mb-4 shrink-0">
@@ -47,7 +56,12 @@ export default async function PlannerPage({ params }: { params: { id: string; zo
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <PlannerInterface zone={zone} libraryElements={libraryElements} totalArea={totalArea} />
+        <PlannerInterface 
+            zone={zone} 
+            libraryElements={libraryElements} 
+            childZones={processedChildZones}
+            totalArea={totalArea} 
+        />
       </div>
     </div>
   );
