@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { IDesignElement } from '@/modules/library/models/DesignElement';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@/components/ui';
 import { Save, RotateCw, Trash, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
-import { saveZoneLayout, getZoneLayout } from '../actions';
+import { updateZoneLayout, getZoneLayout } from '../actions';
 
 interface PlacedElement {
   instanceId: string;
@@ -29,6 +29,8 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
   const [elements, setElements] = useState<PlacedElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [container, setContainer] = useState<{ width: number; length: number } | null>(null);
@@ -45,6 +47,8 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
   const [mode, setMode] = useState<'elements' | 'zones'>('zones');
   const [draggingZoneId, setDraggingZoneId] = useState<string | null>(null);
   const [childRects, setChildRects] = useState<Array<{ zoneId: string; name: string; x: number; y: number; width: number; length: number; maxArea: number }>>([]);
+  const [autoSave, setAutoSave] = useState<boolean>(true);
+  const initializedRef = useRef<boolean>(false);
   
   // Canvas settings (1 meter = 40 pixels)
   const SCALE = 40;
@@ -101,28 +105,86 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
           }
         }
         setIsLoading(false);
+        initializedRef.current = true;
     };
     loadLayout();
   }, [zone._id]);
   
   const handleSave = async () => {
     setIsSaving(true);
-    const result = await saveZoneLayout(
-      zone._id, 
-      elements, 
-      container || undefined,
-      childRects.map(r => ({ zoneId: r.zoneId, name: r.name, x: r.x, y: r.y, width: r.width, length: r.length }))
-      ,
-      unit
-    );
+    setSavingStatus('saving');
+    const result = await updateZoneLayout(zone._id, {
+      unit,
+      container: container || undefined,
+      elements: elements.map(el => ({
+        elementId: el.elementId,
+        instanceId: el.instanceId,
+        name: el.name,
+        x: el.x,
+        y: el.y,
+        width: el.width,
+        length: el.length,
+        rotation: el.rotation,
+        color: el.color,
+      })),
+      childZones: childRects.map(r => ({
+        zoneId: r.zoneId,
+        name: r.name,
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        length: r.length,
+      })),
+    });
     setIsSaving(false);
     if (result.success) {
+        setSavingStatus('saved');
+        setLastSavedAt(Date.now());
         // Maybe show toast notification here
         console.log('Layout saved successfully');
     } else {
+        setSavingStatus('error');
         alert('Failed to save layout');
     }
   };
+  useEffect(() => {
+    if (!autoSave) return;
+    if (isLoading) return;
+    if (!initializedRef.current) return;
+    setSavingStatus('saving');
+    const t = setTimeout(async () => {
+      const result = await updateZoneLayout(zone._id, {
+        unit,
+        container: container || undefined,
+        elements: elements.map(el => ({
+          elementId: el.elementId,
+          instanceId: el.instanceId,
+          name: el.name,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          length: el.length,
+          rotation: el.rotation,
+          color: el.color,
+        })),
+        childZones: childRects.map(r => ({
+          zoneId: r.zoneId,
+          name: r.name,
+          x: r.x,
+          y: r.y,
+          width: r.width,
+          length: r.length,
+        })),
+      });
+      if (result.success) {
+        setSavingStatus('saved');
+        setLastSavedAt(Date.now());
+      } else {
+        setSavingStatus('error');
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [elements, container, childRects, unit, autoSave, isLoading, zone._id]);
 
   const handleDragStart = (e: React.DragEvent, element: any) => {
     e.dataTransfer.setData('elementId', element._id);
@@ -665,6 +727,11 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
 
   const widthM = container?.width ?? Math.sqrt(totalArea);
   const lengthM = container?.length ?? Math.sqrt(totalArea);
+  const selectedRect = childRects.find(r => r.zoneId === selectedId);
+  const safeNum = (n: number) => (Number.isFinite(n) ? n : 0);
+  const selectedMinAreaDisplay = safeNum(fmtArea(Math.min(0.1, selectedRect?.maxArea || 0)));
+  const selectedMaxAreaDisplay = safeNum(fmtArea(selectedRect?.maxArea || 0));
+  const selectedValAreaDisplay = safeNum(fmtArea((selectedRect?.width || 0) * (selectedRect?.length || 0)));
 
   return (
     <div className="flex h-[calc(100vh-100px)] gap-4">
@@ -814,18 +881,18 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                       <Label className="text-xs">Area ({unit==='metric'?'sqm':'sqft'})</Label>
                       <div className="flex flex-col gap-1">
                           <div className="flex justify-between text-[10px] text-gray-500">
-                               <span>{fmtArea(Math.min(0.1, childRects.find(r => r.zoneId === selectedId)?.maxArea || 0)).toFixed(1)}</span>
+                               <span>{selectedMinAreaDisplay.toFixed(1)}</span>
                                <span className="font-bold text-blue-600">
-                                  {fmtArea((childRects.find(r => r.zoneId === selectedId)?.width || 0) * (childRects.find(r => r.zoneId === selectedId)?.length || 0)).toFixed(2)}
+                                  {selectedValAreaDisplay.toFixed(2)}
                                </span>
-                               <span>{fmtArea(childRects.find(r => r.zoneId === selectedId)?.maxArea || 0).toFixed(1)}</span>
+                               <span>{selectedMaxAreaDisplay.toFixed(1)}</span>
                           </div>
                           <input
                             type="range"
                             step="0.1"
-                            min={fmtArea(Math.min(0.1, childRects.find(r => r.zoneId === selectedId)?.maxArea || 0))}
-                            max={fmtArea(childRects.find(r => r.zoneId === selectedId)?.maxArea || 0)}
-                            value={fmtArea((childRects.find(r => r.zoneId === selectedId)?.width || 0) * (childRects.find(r => r.zoneId === selectedId)?.length || 0))}
+                            min={selectedMinAreaDisplay}
+                            max={selectedMaxAreaDisplay}
+                            value={selectedValAreaDisplay}
                             onChange={(e) => {
                                const val = parseFloat(e.target.value);
                                if (!isNaN(val)) {
@@ -883,11 +950,20 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                 <option value="zones">Child Zones</option>
                 <option value="elements">Elements</option>
               </select>
+              <label className="flex items-center gap-1 text-sm text-gray-600">
+                <input type="checkbox" checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} />
+                Auto Save
+              </label>
             </div>
             <Button size="sm" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 animate-spin" size={16}/> : <Save size={16} className="mr-2"/>} 
                 Save Layout
             </Button>
+            <div className="text-xs text-gray-500">
+              {savingStatus === 'saving' && 'Saving...'}
+              {savingStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
+              {savingStatus === 'error' && 'Save failed'}
+            </div>
         </div>
 
         <div 
@@ -954,6 +1030,12 @@ export default function PlannerInterface({ zone, libraryElements, childZones = [
                             {unit === 'metric' 
                               ? `${el.width.toFixed(2)}m x ${el.length.toFixed(2)}m`
                               : `${fmtImperial(el.width)} x ${fmtImperial(el.length)}`
+                            }
+                          </div>
+                          <div className="opacity-90">
+                            {unit === 'metric'
+                              ? `${(el.width * el.length).toFixed(2)} sqm`
+                              : `${fmtArea(el.width * el.length).toFixed(2)} sqft`
                             }
                           </div>
                         </div>

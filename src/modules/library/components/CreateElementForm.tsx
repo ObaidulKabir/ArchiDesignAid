@@ -223,16 +223,26 @@ export default function CreateElementForm({ onSuccess, onCancel, initialData }: 
                />
             </div>
              <div className="space-y-2">
-               <Label className="text-gray-500">Max Area ({unit==='metric'?'sqm':'sqft'})</Label>
-               <Input 
-                 type="number" 
-                 step="0.01" 
-                 value={unit==='metric' ? (maxArea ?? 0) : (maxArea ? sqmToSqft(maxArea) : 0)}
-                 onChange={(e) => {
-                   const v = parseFloat(e.target.value || '0');
+             <Label className="text-gray-500">Max Area ({unit==='metric'?'sqm':'sqft'})</Label>
+             <Input 
+               type="text" 
+               value={
+                 unit==='metric' 
+                   ? (typeof maxArea === 'number' ? String(maxArea) : '') 
+                   : (typeof maxArea === 'number' ? String(sqmToSqft(maxArea)) : '')
+               }
+               onChange={(e) => {
+                 const raw = e.target.value;
+                 if (raw.trim() === '') {
+                   setValue('area.max', undefined, { shouldDirty: true });
+                   return;
+                 }
+                 const v = parseFloat(raw);
+                 if (!isNaN(v)) {
                    setValue('area.max', unit==='metric' ? v : sqftToSqm(v), { shouldDirty: true });
-                 }}
-               />
+                 }
+               }}
+             />
             </div>
           </div>
 

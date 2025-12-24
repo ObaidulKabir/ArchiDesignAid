@@ -20,6 +20,9 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
   const [editingElement, setEditingElement] = useState<DesignElement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
+  const mToFt = (m: number) => m * 3.28084;
+  const sqmToSqft = (sqm: number) => sqm * 10.7639;
 
   const categories = ['All', ...Array.from(new Set(elements.map(e => e.category)))];
 
@@ -63,6 +66,14 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
            }}>
              {isAdding || editingElement ? 'Cancel' : 'Add Element'}
            </Button>
+           <select
+             className="h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+             value={unit}
+             onChange={(e) => setUnit(e.target.value as 'metric' | 'imperial')}
+           >
+             <option value="metric">Metric (m, sqm)</option>
+             <option value="imperial">Imperial (ft, sqft)</option>
+           </select>
         </div>
       </div>
 
@@ -111,7 +122,7 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
                 <div className="flex flex-col">
                   <span className="text-xs text-gray-500">Dimensions</span>
                   <span className="font-medium">
-                    {Number(element.dimensions.width.standard).toFixed(2)}m x {Number(element.dimensions.length.standard).toFixed(2)}m
+                    {unit === 'metric' ? `${Number(element.dimensions.width.standard).toFixed(2)}m x ${Number(element.dimensions.length.standard).toFixed(2)}m` : `${mToFt(Number(element.dimensions.width.standard)).toFixed(2)}ft x ${mToFt(Number(element.dimensions.length.standard)).toFixed(2)}ft`}
                   </span>
                 </div>
               </div>
@@ -119,7 +130,7 @@ export default function LibraryManager({ elements, onSeed }: LibraryManagerProps
                 <Box size={16} className="text-gray-400" />
                  <div className="flex flex-col">
                   <span className="text-xs text-gray-500">Area</span>
-                  <span className="font-medium">{element.area.standard} sqm</span>
+                  <span className="font-medium">{unit === 'metric' ? `${Number(element.area.standard).toFixed(2)} sqm` : `${sqmToSqft(Number(element.area.standard)).toFixed(2)} sqft`}</span>
                 </div>
               </div>
             </CardContent>
